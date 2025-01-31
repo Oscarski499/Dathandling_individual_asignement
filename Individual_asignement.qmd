@@ -1,0 +1,334 @@
+---
+title: "Individual assignement"
+subtitle: "Oscar Skirfors"
+#format: revealjs
+fotmat: html
+editor: visual
+---
+
+## Data set overview
+
+-   This assignment is made using a data set from the project feeder watch made available through Tidy Tuesday (<https://github.com/rfordatascience/tidytuesday/tree/main/data/2023/2023-01-10>)
+
+-   Project Feeder Watch is a citizen science project in which owners of bird feeders in the USA and Canada can report their sightings of birds each winter.
+
+-   I have also downloaded a species key that holds the English and scientific names for the 6 letter species codes used in the original data set
+
+-   I have also created a short list in Excel assigning the states of the USA and Canada to 1 of 7 regions
+
+## Data set variables
+
+-   Coordinates of bird feeders
+
+-   The state in which the bird feeder is located
+
+-   Date of sightings
+
+-   Species of bird sighted
+
+-   number of birds sighted
+
+## Data set quality
+
+-   I find the data set quality to be good
+
+-   The data set is offered up not just as course material but also for ecological and ornithological research
+
+-   Details on how reported sightings are evaluated by experts can be found on the project webpage
+
+## Data handling
+
+We will handle the data to:
+
+1.  Create a project overview map, defining regions and locations of bird feeders
+
+2.  A bar chart containing the three most commonly sighted birds and their English names
+
+3.  A scatter plot describing the number of sightings of America's most commonly sighted bird across the different regions and dates
+
+## Needed libraries
+
+```{r, echo=TRUE}
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(patchwork)
+library(png)
+library(grid)
+library(forcats)
+library(lubridate)
+library(tidyr)
+library(ggrepel)
+```
+
+## Load necessary data
+
+```{r, echo=TRUE}
+Bird_data <- read_excel("//my_data/PFW_2021_public.xlsx")
+Bird_data <- tibble::as_tibble(Bird_data)
+
+Regions <- read_excel("//my_data/Regions.xlsx")
+Regions <- tibble::as_tibble(Regions) 
+
+Bird_names <- read_excel("//my_data/Species_translation_sheet.xlsx")
+Bird_names <- tibble::as_tibble(Bird_names) 
+```
+
+## Prepare the data set - Project overview map
+
+1.  Use dplyr function *distinct* to make a data set with 1 entry for every location, containing location ID and coordinates
+2.  save as a CSV file so that we can import it to QGIS
+
+## Prepare the data set - Project overview map
+
+```{r, echo=TRUE}
+
+#Filter out each individual feeder from the data set 
+Feeders <- Bird_data %>% 
+  distinct(loc_id, latitude, longitude)
+
+#save as a CSV file
+write.csv(Feeders, "coordinates.csv", row.names = FALSE)
+
+```
+
+## In QGIS
+
+1.  Load a layer for states and regions from the 1:10m natural earth data set using the CONUS projection
+2.  We use the 7 pre-defined regions for the study area already given in the natural earth 1:10m cultural vector map layer states and regions.
+3.  Split the layer using the QGIS split layer function, and split by attribute region.
+4.  Apply the new layers given and assign colors.
+
+## In QGIS
+
+5.  Add the longitude and latitude columns from our CSV file as coordinates and make them points on the map
+6.  Adjust the size, color, and opaqueness of points
+7.  Export the map as a PNG
+
+## Prepare the data set - Project overview map
+
+```{r, echo=TRUE}
+# Convert the PNG to a map plot that can be handled by ggplot
+map_image <- readPNG("Regions and feeders.png")
+map_grob <- rasterGrob(map_image, interpolate = TRUE)
+map_plot <- wrap_elements(full = map_grob)
+```
+
+## Visualize - figure 1 project overview map
+
+![](Regions%20and%20feeders.png)
+
+## Prepare the data set - Three most commonly sighted birds
+
+1.  *left_join* to join the English bird names to the 6-letter species codes of the data set
+
+2.  *group_by* to group the data set by the new English name column
+
+3.  *summarize* to add a new column with the total amount of observations per bird
+
+4.  *filter* to remove all species with observations below 25000 (this will give us the top three)
+
+## Prepare the data set - Three most commonly sighted birds
+
+5.  *mutate* and *fct_reorder* to reorder the factors so that the species with the most sightings will appear first in the graph
+
+## Prepare the data set - Three most commonly sighted birds
+
+```{r, echo=TRUE}
+#Add the enlish names to the dataset
+Bird_data_with_names <- Bird_data %>%
+  left_join(Bird_names, by = "species_code")
+
+plot_data1 <- Bird_data_with_names %>%
+  group_by(american_english_name) %>% #group by species 
+  summarize(SumObservations = sum(how_many, na.rm = TRUE), .groups = "drop") %>% #sumarize the number of sightings for each species 
+  filter(SumObservations > 25000) %>% #filter out species with less then 25000 observations
+  mutate(american_english_name = fct_reorder(american_english_name, SumObservations, .desc = TRUE))  # Reorder factor levels so that they are plotted from most to least sighted
+  
+```
+
+## Visualize - figure 2 bar plot
+
+1.  geom_col
+
+## Visualize - figure 2 bar plot
+
+```{r, echo=TRUE}
+ #plot the data with observation on Y, month on X, and colour based on region
+plot1 <- ggplot(plot_data1, aes(x = american_english_name, y = SumObservations, fill = american_english_name)) + #asign colour to different species
+  geom_col() + #make a barplot
+  #asign medal colors
+  scale_fill_manual( 
+    values = c(
+      "Dark-eyed Junco" = "#FFD700",
+      "House Sparrow" = "#C0C0C0",
+      "Mourning Dove" = "#CD7F32"
+    )
+  ) +
+  #Ttiles, text and classic theme
+  labs(
+    title = NULL,
+    x = NULL,
+    y = "Sighted individuals",
+  ) +
+  theme_classic() +
+  theme(legend.position = "none",
+  axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+  axis.text.y = element_text(size = 10))
+```
+
+## Visualize - figure 2 bar plot
+
+```{r, echo=FALSE}
+print(plot1)
+```
+
+![](images/clipboard-916120674.png)
+
+## Prepare the data set - The sightings of the most common bird across regions and time
+
+1.  *filter* to get a data set with only the most commonly sighted bird
+
+2.  Copy and paste the state lists with their assigned regions from QGIS and paste them into an excel sheet
+
+3.  *left_join* to assign regions to the states already given in the bird data set
+
+4.  *filter* to remove any entries where the reporter did not specify state (NA)
+
+## Prepare the data set - The sightings of the most common bird across regions and time
+
+5.  *unite* to join the columns "year", "month" and "day" to the new column "date"
+6.  *mutate* and **lubridate** function *ymd* to convert the date column into a yy-mm-dd format recognized by R
+7.  *group by* to group data by date and region
+8.  *summarize* to add a column with the total number of bird sightings per day and region
+
+## Prepare the data set - The sightings of the most common bird across regions and time
+
+```{r, echo=TRUE}
+Bird_data_with_regions <- Bird_data_with_names %>% #Add regions to the dataset 
+  filter(species_code == "daejun") %>% #filter out only Dark eyed Juncos
+  left_join(Regions, by = "subnational1_code") %>% #asign regions to the states
+filter(region != "NA") #filter out observations without asigned states
+
+plot_data2 <- Bird_data_with_regions %>% unite("Date", Year, Month, Day, sep = "-") %>% #make the new date column
+  mutate(Date = ymd(Date)) %>%  # Convert to Date format
+  group_by(region, Date) %>% #group the data by regions and months
+  summarize(SumObservations = sum(how_many, na.rm = TRUE), .groups = "drop")  #create a new column in the dataset with observed Dark-eyed Juncos per region and day 
+```
+
+## Visualize - figure 3 scatter plot
+
+1.  geom_point
+
+2.  geom_line
+
+3.  facet_wrap (by regions)
+
+## Visualize - figure 3 scatter plot
+
+```{r, echo=TRUE}
+#plot birds observes against date and color by region
+plot2 <- ggplot(plot_data2, aes(x = Date, y = SumObservations, color = region)) + 
+  geom_point(alpha = 0.5) + #make scatterplot
+  #add black trendline
+  geom_smooth(method = "loess", se = FALSE, show.legend = FALSE, color = "black") +
+  facet_wrap(~ region) +  #make a multifaceted plot based on regions
+  #assign same colours as in map
+  scale_color_manual(values = c(
+      "Eastern Canada" = "red",
+      "Western Canada" = "blue",
+      "Northern Canada" = "green",
+      "Midwest" = "orange", 
+      "Northeast" = "yellow", 
+      "South" = "cyan",
+      "West" = "magenta"
+    )) +
+  #text options and theme classic 
+  theme_classic() +  
+  labs(
+    title = NULL,
+    x = NULL,
+    y = "Sighted individuals"
+  ) +
+  theme(
+    legend.position = "none",  # Remove legend completely
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Visualize - figure 3 scatter plot
+
+```{r, echo=FALSE}
+print(plot2)
+```
+
+![](images/clipboard-2520243411.png)
+
+## Visualize - the final figure
+
+1.  *annotate* to set titles and source text
+
+2.  Add the two plots and the map into a final figure
+
+## Visualize - the final figure
+
+```{r, echo=TRUE}
+
+# Function to add a title above each plot
+add_title <- function(plot, title_text) {
+  wrap_elements(full = 
+    ggplot() + 
+      annotate("text", x = 0.5, y = 0, label = title_text, size = 3, fontface = "bold", hjust = 0.5) +
+      theme_void() + #no background 
+      theme(plot.margin = margin(t = -5, b = -5))  # Reduce margin to minimize space between title and plot
+  ) / plot  # Stack title above plot
+}
+
+# Apply the titles function to each plot
+map_with_title <- add_title(map_plot, "A. Regions and project feeders")
+bar_with_title <- add_title(plot1, "B. 3 most sighted species")
+scatter_with_title <- add_title(plot2, "C. Sightings of Dark-eyed Juncos")
+
+# Combine plots
+Final_figure <- ((map_with_title / bar_with_title) | scatter_with_title) +
+  #make small source caption
+  plot_annotation(
+    caption = "Source: Project feeder watch",
+    #set a theme and size for the small source caption
+    theme = theme(
+      plot.title = element_text(size = 16, face = "bold", hjust = 0.5),  # Title
+      plot.caption = element_text(size = 10, hjust = 1))) +
+  #make scatterplot wider than the other two
+  plot_layout(
+    widths = c(1, 2))
+   
+```
+
+## Visualize - the final figure
+
+```{r, echo=FALSE}
+# Print the final figure
+print(Final_figure)
+```
+
+![](images/clipboard-2200779310.png)
+
+## Reflections - New skills
+
+1.  I have become more fluent in the tidyr package and it has opened my eyes to easier solutions to problems I used to solve by elaborate loops going through the data set
+
+2.  I have learned QGIS which is a good complement to ArcGIS as I think it is both more user-friendly and also free
+
+## Reflections - Challenges
+
+1.  The most challenging part for me was to produce the final figure in the end and make it look good after exporting. One solution was that I scrapped one of the plots I had made. (A cool pie chart)
+
+2.  In the future setting sizes for plots before combining them I think would help
+
+## Reflections - Areas for future improvement
+
+1.  I still have a lot to learn about producing good layouts for bigger multy plot figures and how to code to get them the way I want them.
+
+2.  I have also a lot to learn when it comes to working with Quarto presentation mode
