@@ -1,5 +1,5 @@
 # Dathandling_individual_asignement
-This reposatory was created as a part of the course "Data handling and high-quality illustrations for publications P000085 2025V" given Jamuary 2025.
+This repository was created as a part of the course "Data handling and high-quality illustrations for publications P000085 2025V" given Jamuary 2025.
 
 The work done is based on the tidy_teusday dataset project feeder watch.
 
